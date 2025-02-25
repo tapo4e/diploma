@@ -32,7 +32,7 @@ class BluetoothController(private val context: Context) {
 
     private val foundDeviceReceiver = DeviceReceiver { device ->
         _scannedDevices.update { devices ->
-            val newDevice = device.
+            val newDevice = BlData(listOf(1,2),device.name)
             if(newDevice in devices) devices else devices + newDevice
         }
     }
