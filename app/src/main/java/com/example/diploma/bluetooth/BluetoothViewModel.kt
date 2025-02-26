@@ -1,9 +1,12 @@
 package com.example.diploma.bluetooth
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.example.diploma.App
+import kotlinx.coroutines.launch
 
 class BluetoothViewModel(private val controller: BluetoothController) : ViewModel() {
     companion object {
@@ -18,7 +21,17 @@ class BluetoothViewModel(private val controller: BluetoothController) : ViewMode
             }
         }
     }
-
+    val mes = controller.readDataStateFlow
+    val scannedData = controller.scannedDevices
     val data = controller.pairedDevices
 
+    fun startDiscovery(){
+        controller.startDiscovery()
+    }
+    fun connect(){
+        viewModelScope.launch { controller.connectToDevice(if(data.value.address!="") data.value else scannedData.value) }
+    }
+    fun send(){
+        viewModelScope.launch { controller.sendMessage() }
+    }
 }

@@ -12,14 +12,30 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.magnifier
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 import com.example.diploma.bluetooth.BluetoothViewModel
+import com.example.diploma.bluetooth.data.BlData
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 
 class MainActivity : ComponentActivity() {
+    private val bluetoothViewModel: BluetoothViewModel by viewModels { BluetoothViewModel.factory }
     private val bluetoothManager by lazy {
         applicationContext.getSystemService(BluetoothManager::class.java)
     }
@@ -28,6 +44,7 @@ class MainActivity : ComponentActivity() {
     }
     private val isBluetoothEnabled: Boolean
         get() = bluetoothAdapter?.isEnabled == true
+
     @SuppressLint("StateFlowValueCalledInComposition")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,17 +73,32 @@ class MainActivity : ComponentActivity() {
                 )
             )
         }
+        if(bluetoothViewModel.data.value.address!=""){
+            bluetoothViewModel.connect()
+        }
+        else {
+            bluetoothViewModel.startDiscovery()
+        }
         setContent {
-            val bluetoothViewModel:BluetoothViewModel = viewModel(factory = BluetoothViewModel.factory)
-            val data = bluetoothViewModel.data
-            Log.d("work", data.value.toString())
-            Box()
+            Box(bluetoothViewModel)
         }
     }
 }
 
 @Composable
-fun Box(){
-    Box(modifier = Modifier.fillMaxWidth())
+fun Box(viewModel: BluetoothViewModel){
+    val item by viewModel.scannedData.collectAsState()
+    val mes by viewModel.mes.collectAsState()
+    Box(modifier = Modifier.fillMaxSize()){
+
+           item.name?.let { Text(text = it) }
+Text(text = mes)
+        Button(onClick = { viewModel.connect()},Modifier.align(Alignment.BottomCenter)) {
+
+        }
+        Button(onClick = { viewModel.send()},Modifier.align(Alignment.BottomEnd)) {
+
+        }
+    }
 }
 
