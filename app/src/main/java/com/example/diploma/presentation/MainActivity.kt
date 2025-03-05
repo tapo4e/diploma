@@ -20,7 +20,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.example.diploma.bluetooth.BluetoothViewModel
+import com.example.diploma.presentation.components.MainScreen
+import com.example.diploma.presentation.components.ScanningScreen
 
 class MainActivity : ComponentActivity() {
     private val bluetoothViewModel: BluetoothViewModel by viewModels { BluetoothViewModel.factory }
@@ -67,23 +72,28 @@ class MainActivity : ComponentActivity() {
                 )
             )
         }
+
         setContent {
-            Box(bluetoothViewModel)
+            val navController = rememberNavController()
+            NavHost(
+                navController = navController,
+                startDestination = "first_screen"
+            ) {
+                composable("first_screen") {
+                    ScanningScreen(goToMainScreen = {
+                        navController.navigate(
+                            "main_screen"
+                        )
+                    }, state = bluetoothViewModel.isConnected)
+                }
+                composable("main_screen") { MainScreen {
+                    bluetoothViewModel.send()
+                }  }
+            }
+
         }
     }
 }
 
-@Composable
-fun Box(viewModel: BluetoothViewModel) {
-    val item by viewModel.scannedDev.collectAsState()
-    val mes by viewModel.data.collectAsState()
-    Box(modifier = Modifier.fillMaxSize()) {
 
-        item.name?.let { Text(text = it) }
-        Text(text = mes)
-        Button(onClick = { viewModel.send() }, Modifier.align(Alignment.BottomEnd)) {
-
-        }
-    }
-}
 

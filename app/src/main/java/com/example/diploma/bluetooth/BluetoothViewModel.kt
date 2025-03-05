@@ -22,7 +22,7 @@ class BluetoothViewModel(private val controller: BluetoothController) : ViewMode
     }
     val data = controller.readDataStateFlow
     val scannedDev = controller.scannedDevices
-
+    val isConnected = controller.isConnected
     fun startDiscovery(){
         viewModelScope.launch {
             controller.startDiscovery()

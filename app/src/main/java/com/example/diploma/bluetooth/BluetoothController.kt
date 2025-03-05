@@ -53,6 +53,16 @@ class BluetoothController(private val context: Context) {
 
 
 
+    private val bluetoothStateReceiver = StateReceiver { isConnected, bluetoothDevice ->
+        if(bluetoothAdapter?.bondedDevices?.contains(bluetoothDevice) == true) {
+            _isConnected.update { isConnected }
+        } else {
+            CoroutineScope(Dispatchers.IO).launch {
+                _errors.emit("Can't connect to a non-paired device.")
+            }
+        }
+    }
+
     private val foundDeviceReceiver = DeviceReceiver { device ->
         _scannedDevices.update { devices ->
             val newDevice = BlData(listOf(1, 2), device.name, device.address)
@@ -69,18 +79,12 @@ class BluetoothController(private val context: Context) {
     val errors: SharedFlow<String>
         get() = _errors.asSharedFlow()
 
-    private val bluetoothStateReceiver = StateReceiver { isConnected, bluetoothDevice ->
-        if (bluetoothAdapter?.bondedDevices?.contains(bluetoothDevice) == true) {
-            _isConnected.update { isConnected }
-        } else {
-            CoroutineScope(Dispatchers.IO).launch {
-                _errors.emit("Can't connect to a non-paired device.")
-            }
-        }
-    }
+
 
     init {
-        updatePairedDevices()
+//        CoroutineScope(Dispatchers.IO).launch {
+//            updatePairedDevices()
+//        }
         context.registerReceiver(
             bluetoothStateReceiver,
             IntentFilter().apply {
@@ -96,11 +100,11 @@ class BluetoothController(private val context: Context) {
         if (!hasPermission(Manifest.permission.BLUETOOTH_SCAN))
             return
 
-        updatePairedDevices()
-        if (_scannedDevices.value.address != "") {
-            connectToDevice(_scannedDevices.value)
-            return
-        }
+//        updatePairedDevices()
+//        if (_scannedDevices.value.address != "") {
+//            connectToDevice(_scannedDevices.value)
+//            return
+//        }
         Log.d("startDiscovery", "ok")
         context.registerReceiver(
             foundDeviceReceiver,
@@ -109,7 +113,7 @@ class BluetoothController(private val context: Context) {
         bluetoothAdapter?.startDiscovery()
     }
 
-    private fun stopDiscovery() {
+    private suspend fun stopDiscovery() {
         if (!hasPermission(Manifest.permission.BLUETOOTH_SCAN)) {
             return
         }
@@ -167,21 +171,21 @@ class BluetoothController(private val context: Context) {
         closeConnection()
     }
 
-    private fun updatePairedDevices() {
-        if (!hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
-            Log.d("updatePairedDevices", "cancel")
-            return
-        }
-        Log.d("updatePairedDevices", "ok")
-        bluetoothAdapter?.bondedDevices?.forEach { device ->
-            if (device.name == "HC-05") _scannedDevices.update {
-                BlData(
-                    name = device.name,
-                    address = device.address
-                )
-            }
-        }
-    }
+//     private suspend fun updatePairedDevices() {
+//        if (!hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
+//            Log.d("updatePairedDevices", "cancel")
+//            return
+//        }
+//        Log.d("updatePairedDevices", "ok")
+//        bluetoothAdapter?.bondedDevices?.forEach { device ->
+//            if (device.name == "HC-05") _scannedDevices.update {
+//                BlData(
+//                    name = device.name,
+//                    address = device.address
+//                )
+//            }
+//        }
+//    }
 
     private fun hasPermission(permission: String): Boolean {
         return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
