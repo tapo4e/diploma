@@ -11,18 +11,17 @@ import android.content.Context
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.util.Log
-import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.diploma.bluetooth.data.BlData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -32,8 +31,8 @@ import java.util.UUID
 class BluetoothController(private val context: Context) {
 
     private var dataTransferService: BluetoothDataTransferService? = null
-    private  val _readDataStateFlow = MutableStateFlow("")
-    val readDataStateFlow:StateFlow<String>
+    private val _readDataStateFlow = MutableStateFlow("")
+    val readDataStateFlow: StateFlow<String>
         get() = _readDataStateFlow.asStateFlow()
 
     private val bluetoothManager by lazy {
@@ -43,27 +42,26 @@ class BluetoothController(private val context: Context) {
         bluetoothManager?.adapter
     }
     private val _isConnected = MutableStateFlow(false)
-     val isConnected: StateFlow<Boolean>
+    val isConnected: StateFlow<Boolean>
         get() = _isConnected.asStateFlow()
     private var currentServerSocket: BluetoothServerSocket? = null
     private var currentClientSocket: BluetoothSocket? = null
-    
+
     private val _scannedDevices = MutableStateFlow(BlData())
     val scannedDevices: StateFlow<BlData>
         get() = _scannedDevices.asStateFlow()
 
-    private val _pairedDevices = MutableStateFlow(BlData())
-    val pairedDevices: StateFlow<BlData>
-        get() = _pairedDevices.asStateFlow()
+
 
     private val foundDeviceReceiver = DeviceReceiver { device ->
         _scannedDevices.update { devices ->
-            val newDevice = BlData(listOf(1,2),device.name,device.address)
-            if(newDevice.name =="HC-05") {
-                stopDiscovery()
+            val newDevice = BlData(listOf(1, 2), device.name, device.address)
+            if (newDevice.name == "HC-05") {
+                CoroutineScope(Dispatchers.IO).launch {
+                    connectToDevice(newDevice)
+                }
                 newDevice
-            }
-            else devices
+            } else devices
         }
     }
 
@@ -72,7 +70,7 @@ class BluetoothController(private val context: Context) {
         get() = _errors.asSharedFlow()
 
     private val bluetoothStateReceiver = StateReceiver { isConnected, bluetoothDevice ->
-        if(bluetoothAdapter?.bondedDevices?.contains(bluetoothDevice) == true) {
+        if (bluetoothAdapter?.bondedDevices?.contains(bluetoothDevice) == true) {
             _isConnected.update { isConnected }
         } else {
             CoroutineScope(Dispatchers.IO).launch {
@@ -80,9 +78,9 @@ class BluetoothController(private val context: Context) {
             }
         }
     }
+
     init {
         updatePairedDevices()
-        Log.d("work",pairedDevices.value.toString())
         context.registerReceiver(
             bluetoothStateReceiver,
             IntentFilter().apply {
@@ -93,58 +91,64 @@ class BluetoothController(private val context: Context) {
         )
     }
 
- fun startDiscovery() {
-    if(!hasPermission(Manifest.permission.BLUETOOTH_SCAN)) {
-        return
-    }
+    suspend fun startDiscovery() {
 
-    context.registerReceiver(
-        foundDeviceReceiver,
-        IntentFilter(BluetoothDevice.ACTION_FOUND)
-    )
+        if (!hasPermission(Manifest.permission.BLUETOOTH_SCAN))
+            return
 
-    updatePairedDevices()
-
-    bluetoothAdapter?.startDiscovery()
-}
-    private fun stopDiscovery() {
-        if(!hasPermission(Manifest.permission.BLUETOOTH_SCAN)) {
+        updatePairedDevices()
+        if (_scannedDevices.value.address != "") {
+            connectToDevice(_scannedDevices.value)
             return
         }
-        Log.d("stopDiscovery","ok")
+        Log.d("startDiscovery", "ok")
+        context.registerReceiver(
+            foundDeviceReceiver,
+            IntentFilter(BluetoothDevice.ACTION_FOUND)
+        )
+        bluetoothAdapter?.startDiscovery()
+    }
+
+    private fun stopDiscovery() {
+        if (!hasPermission(Manifest.permission.BLUETOOTH_SCAN)) {
+            return
+        }
+        Log.d("stopDiscovery", "ok")
         bluetoothAdapter?.cancelDiscovery()
     }
-     suspend fun connectToDevice(device: BlData) {
-            if(!hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
-                throw SecurityException("No BLUETOOTH_CONNECT permission")
-            }
 
-            currentClientSocket = bluetoothAdapter
-                ?.getRemoteDevice(device.address)
-                ?.createRfcommSocketToServiceRecord(
-                    UUID.fromString(SERVICE_UUID)
-                )
-            stopDiscovery()
+    private suspend fun connectToDevice(device: BlData) {
+        if (!hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
+            throw SecurityException("No BLUETOOTH_CONNECT permission")
+        }
 
-            currentClientSocket?.let { socket ->
-                try {
-                    socket.connect()
-                    val service = BluetoothDataTransferService(socket)
-                    dataTransferService = service
-                    service.listenForIncomingMessages().collect{device->
-                        Log.d("data",device)
-                        _readDataStateFlow.update { it+device }}
+        currentClientSocket = bluetoothAdapter
+            ?.getRemoteDevice(device.address)
+            ?.createRfcommSocketToServiceRecord(
+                UUID.fromString(SERVICE_UUID)
+            )
+        stopDiscovery()
 
-                } catch(e: IOException) {
-                    socket.close()
-                    currentClientSocket = null
+        currentClientSocket?.let { socket ->
+            try {
+                socket.connect()
+                val service = BluetoothDataTransferService(socket)
+                dataTransferService = service
+                service.listenForIncomingMessages().collect { device ->
+                    Log.d("data", device)
+                    _readDataStateFlow.update { it + device }
                 }
+
+            } catch (e: IOException) {
+                socket.close()
+                currentClientSocket = null
             }
+        }
 
     }
 
-    suspend fun sendMessage(data:Int=1){
-        if(!hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
+    suspend fun sendMessage(data: Int = 1) {
+        if (!hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
             return
         }
         dataTransferService?.sendMessage(data)
@@ -163,16 +167,26 @@ class BluetoothController(private val context: Context) {
         closeConnection()
     }
 
-     fun updatePairedDevices() {
+    private fun updatePairedDevices() {
         if (!hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
+            Log.d("updatePairedDevices", "cancel")
             return
         }
-        bluetoothAdapter?.bondedDevices?.forEach{device->if(device.name =="HC-05")_pairedDevices.update {BlData(name = it.name, address = it.address) }}
+        Log.d("updatePairedDevices", "ok")
+        bluetoothAdapter?.bondedDevices?.forEach { device ->
+            if (device.name == "HC-05") _scannedDevices.update {
+                BlData(
+                    name = device.name,
+                    address = device.address
+                )
+            }
+        }
     }
 
     private fun hasPermission(permission: String): Boolean {
         return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
     }
+
     companion object {
         const val SERVICE_UUID = "00001101-0000-1000-8000-00805F9B34FB"
     }

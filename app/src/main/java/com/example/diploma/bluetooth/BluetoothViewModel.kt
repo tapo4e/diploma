@@ -1,11 +1,10 @@
 package com.example.diploma.bluetooth
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
-import com.example.diploma.App
+import com.example.diploma.presentation.App
 import kotlinx.coroutines.launch
 
 class BluetoothViewModel(private val controller: BluetoothController) : ViewModel() {
@@ -15,23 +14,26 @@ class BluetoothViewModel(private val controller: BluetoothController) : ViewMode
             override fun <T : ViewModel> create(
                 modelClass: Class<T>, extras: CreationExtras
             ): T {
-                val dataBase =
+                val bluetooth =
                     (checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]) as App).blueToothController
-                return BluetoothViewModel(dataBase) as T
+                return BluetoothViewModel(bluetooth) as T
             }
         }
     }
-    val mes = controller.readDataStateFlow
-    val scannedData = controller.scannedDevices
-    val data = controller.pairedDevices
+    val data = controller.readDataStateFlow
+    val scannedDev = controller.scannedDevices
 
     fun startDiscovery(){
-        controller.startDiscovery()
-    }
-    fun connect(){
-        viewModelScope.launch { controller.connectToDevice(if(data.value.address!="") data.value else scannedData.value) }
+        viewModelScope.launch {
+            controller.startDiscovery()
+        }
     }
     fun send(){
         viewModelScope.launch { controller.sendMessage() }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        controller.release()
     }
 }

@@ -1,4 +1,4 @@
-package com.example.diploma
+package com.example.diploma.presentation
 
 import android.app.Application
 import com.example.diploma.bluetooth.BluetoothController
